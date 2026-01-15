@@ -19,8 +19,9 @@ def incoming_sms(request: Request):
     print("DATA:", params)
 
     # 2. Hent råverdier
-    raw_phone = params.get("phonern")
-    txt = params.get("txt")
+    raw_phone = params.get("phonern") or params.get("fromid")
+txt = params.get("txt")
+
 
     print("RAW_PHONE:", repr(raw_phone))
     print("TXT:", repr(txt))
@@ -63,3 +64,4 @@ def incoming_sms(request: Request):
     elif step == "adresse":
         data["adresse"] = txt
         update_state(phonern, "tidspunkt", data)
+
