@@ -18,7 +18,13 @@ def incoming_sms(request: Request):
     print("INNKOMMENDE SMS MOTTATT")
     print("DATA:", params)
 
-    phonern = params.get("phonern")
+    raw_phone = params.get("phonern")
+
+if raw_phone.startswith("00"):
+    phonern = "+" + raw_phone[2:]
+else:
+    phonern = raw_phone
+
     txt = params.get("txt")
 
     if not phonern or not txt:
@@ -58,6 +64,7 @@ def incoming_sms(request: Request):
         print("FULL LEAD:", data)
 
     return {"status": "ok"}
+
 
 
 
