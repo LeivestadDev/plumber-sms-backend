@@ -14,10 +14,10 @@ def health():
 def incoming_sms(request: Request):
     params = dict(request.query_params)
 
-    print("INNKOMMENDE SMS MOTTATT")
-    print("DATA:", params)
+    print("=== INNKOMMENDE SMS ===")
+    print("RAW PARAMS:", params)
 
-    # 1. HENT NUMMER ROBUST
+    # Front kan sende enten phonern eller fromid
     raw_phone = params.get("phonern") or params.get("fromid")
     txt = params.get("txt")
 
@@ -28,7 +28,7 @@ def incoming_sms(request: Request):
         print("Mangler nummer eller tekst – ignorerer")
         return {"status": "ignored"}
 
-    # 2. NORMALISER NUMMER
+    # Normaliser nummer til +47...
     if raw_phone.startswith("00"):
         phone = "+" + raw_phone[2:]
     elif raw_phone.startswith("+"):
@@ -38,7 +38,7 @@ def incoming_sms(request: Request):
 
     print("NORMALISERT NUMMER:", phone)
 
-    # 3. HENT SAMTALESTATE
+    # Hent samtalestatus
     state = get_state(phone)
     step = state["step"]
     data = state["data"]
@@ -46,7 +46,7 @@ def incoming_sms(request: Request):
     print("STEP:", step)
     print("DATA FØR:", data)
 
-    # 4. SAMTALELOGIKK
+    # Samtaleflyt
     if step == "problem":
         data["problem"] = txt
         update_state(phone, "adresse", data)
@@ -77,7 +77,7 @@ def incoming_sms(request: Request):
         print("FULL LEAD:", data)
 
     else:
-        # fallback
+        # fallback hvis state er ukjent
         update_state(phone, "problem", {})
         send_sms(
             phone,
