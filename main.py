@@ -2,9 +2,6 @@ from fastapi import FastAPI, Request
 from sms import send_sms
 from conversation import get_state, update_state
 
-
-
-
 app = FastAPI()
 
 @app.get("/")
@@ -19,16 +16,18 @@ def incoming_sms(request: Request):
     print("DATA:", params)
 
     raw_phone = params.get("phonern")
-
-if raw_phone.startswith("00"):
-    phonern = "+" + raw_phone[2:]
-else:
-    phonern = raw_phone
-
     txt = params.get("txt")
 
-    if not phonern or not txt:
+    if not raw_phone or not txt:
         return {"status": "ignored"}
+
+    # Normaliser telefonnummer
+    if raw_phone.startswith("00"):
+        phonern = "+" + raw_phone[2:]
+    else:
+        phonern = raw_phone
+
+    print("NORMALISERT NUMMER:", phonern)
 
     state = get_state(phonern)
     step = state["step"]
@@ -64,7 +63,3 @@ else:
         print("FULL LEAD:", data)
 
     return {"status": "ok"}
-
-
-
-
