@@ -27,6 +27,8 @@ def incoming_sms(request: Request):
         phonern = raw_phone
 
     print("NORMALISERT NUMMER:", phonern)
+    update_state(phonern, "start", {})
+
 
     state = get_state(phonern)
     step = state["step"]
@@ -70,5 +72,6 @@ def incoming_sms(request: Request):
         print("FULL LEAD:", data)
 
     return {"status": "ok"}
+
 
 
