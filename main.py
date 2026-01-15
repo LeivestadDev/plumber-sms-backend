@@ -12,56 +12,76 @@ def health():
 
 @app.get("/incoming-sms")
 def incoming_sms(request: Request):
-    # 1. Hent alle query-parametere fra Front
     params = dict(request.query_params)
 
     print("INNKOMMENDE SMS MOTTATT")
     print("DATA:", params)
 
-    # 2. Hent råverdier
+    # 1. HENT NUMMER ROBUST
     raw_phone = params.get("phonern") or params.get("fromid")
-txt = params.get("txt")
+    txt = params.get("txt")
 
+    print("RAW_PHONE:", raw_phone)
+    print("TXT:", txt)
 
-    print("RAW_PHONE:", repr(raw_phone))
-    print("TXT:", repr(txt))
-
-    # 3. Håndter retries / tomme kall fra Front
-    if raw_phone is None or txt is None:
+    if not raw_phone or not txt:
         print("Mangler nummer eller tekst – ignorerer")
         return {"status": "ignored"}
 
-    txt = txt.strip()
-    if txt == "":
-        print("Tom tekst (retry fra gateway) – ignorerer")
-        return {"status": "ignored"}
-
-    # 4. Normaliser telefonnummer
+    # 2. NORMALISER NUMMER
     if raw_phone.startswith("00"):
-        phonern = "+" + raw_phone[2:]
+        phone = "+" + raw_phone[2:]
+    elif raw_phone.startswith("+"):
+        phone = raw_phone
     else:
-        phonern = raw_phone
+        phone = "+" + raw_phone
 
-    print("NORMALISERT NUMMER:", phonern)
+    print("NORMALISERT NUMMER:", phone)
 
-    # 5. Hent samtalestatus
-    state = get_state(phonern)
+    # 3. HENT SAMTALESTATE
+    state = get_state(phone)
     step = state["step"]
     data = state["data"]
 
     print("STEP:", step)
+    print("DATA FØR:", data)
 
-    # 6. Samtaleflyt
+    # 4. SAMTALELOGIKK
     if step == "problem":
         data["problem"] = txt
-        update_state(phonern, "adresse", data)
+        update_state(phone, "adresse", data)
 
         send_sms(
-            phonern,
+            phone,
             "Takk. Hvor gjelder dette? (adresse eller område)"
         )
 
     elif step == "adresse":
         data["adresse"] = txt
-        update_state(phonern, "tidspunkt", data)
+        update_state(phone, "tidspunkt", data)
 
+        send_sms(
+            phone,
+            "Når trenger du hjelp?\n1️⃣ Akutt\n2️⃣ I dag\n3️⃣ Senere"
+        )
+
+    elif step == "tidspunkt":
+        data["tidspunkt"] = txt
+        update_state(phone, "done", data)
+
+        send_sms(
+            phone,
+            "Takk! Vi tar kontakt straks."
+        )
+
+        print("FULL LEAD:", data)
+
+    else:
+        # fallback
+        update_state(phone, "problem", {})
+        send_sms(
+            phone,
+            "Hei! Hva gjelder henvendelsen?"
+        )
+
+    return {"status": "ok"}
