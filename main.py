@@ -1,5 +1,9 @@
 from fastapi import FastAPI, Request
 from sms import send_sms
+from conversation import get_state, update_state
+
+
+
 
 app = FastAPI()
 
@@ -14,5 +18,46 @@ def incoming_sms(request: Request):
     print("INNKOMMENDE SMS MOTTATT")
     print("DATA:", params)
 
-    return {"status": "received"}
+    phonern = params.get("phonern")
+    txt = params.get("txt")
+
+    if not phonern or not txt:
+        return {"status": "ignored"}
+
+    state = get_state(phonern)
+    step = state["step"]
+    data = state["data"]
+
+    if step == "problem":
+        data["problem"] = txt
+        update_state(phonern, "adresse", data)
+
+        send_sms(
+            phonern,
+            "Takk. Hvor gjelder dette? (adresse eller område)"
+        )
+
+    elif step == "adresse":
+        data["adresse"] = txt
+        update_state(phonern, "tidspunkt", data)
+
+        send_sms(
+            phonern,
+            "Når trenger du hjelp?\n1️⃣ Akutt\n2️⃣ I dag\n3️⃣ Senere"
+        )
+
+    elif step == "tidspunkt":
+        data["tidspunkt"] = txt
+        update_state(phonern, "done", data)
+
+        send_sms(
+            phonern,
+            "Takk! Book tidspunkt her: https://calendly.com/DITT-LENKE"
+        )
+
+        print("FULL LEAD:", data)
+
+    return {"status": "ok"}
+
+
 
