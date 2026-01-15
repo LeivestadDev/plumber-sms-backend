@@ -4,9 +4,11 @@ from conversation import get_state, update_state
 
 app = FastAPI()
 
+
 @app.get("/")
 def health():
     return {"status": "ok"}
+
 
 @app.get("/incoming-sms")
 def incoming_sms(request: Request):
@@ -19,59 +21,59 @@ def incoming_sms(request: Request):
     txt = params.get("txt")
 
     if not raw_phone or not txt:
+        print("Mangler nummer eller tekst – ignorerer")
         return {"status": "ignored"}
 
+    # Normaliser nummer
     if raw_phone.startswith("00"):
         phonern = "+" + raw_phone[2:]
     else:
         phonern = raw_phone
 
     print("NORMALISERT NUMMER:", phonern)
-    update_state(phonern, "start", {})
-
 
     state = get_state(phonern)
-    step = state["step"]
-    data = state["data"]
+    step = state.get("step", "start")
+    data = state.get("data", {})
+
+    print("STEP:", step)
+
+    # ---- FLYT ----
 
     if step == "start":
         update_state(phonern, "problem", {})
         send_sms(
             phonern,
-            "Hei! Hva gjelder henvendelsen?"
+            "Hei! 👋 Hva gjelder henvendelsen?"
         )
         return {"status": "started"}
 
     if step == "problem":
         data["problem"] = txt
         update_state(phonern, "adresse", data)
-
         send_sms(
             phonern,
-            "Takk. Hvor gjelder dette? (adresse eller område)"
+            "Hvor gjelder dette? (adresse eller område)"
         )
+        return {"status": "problem_received"}
 
-    elif step == "adresse":
+    if step == "adresse":
         data["adresse"] = txt
         update_state(phonern, "tidspunkt", data)
-
         send_sms(
             phonern,
             "Når trenger du hjelp?\n1️⃣ Akutt\n2️⃣ I dag\n3️⃣ Senere"
         )
+        return {"status": "adresse_received"}
 
-    elif step == "tidspunkt":
+    if step == "tidspunkt":
         data["tidspunkt"] = txt
         update_state(phonern, "done", data)
-
         send_sms(
             phonern,
-            "Takk! Book tidspunkt her: https://calendly.com/DITT-LENKE"
+            "Takk! Vi tar kontakt veldig snart 👍"
         )
-
         print("FULL LEAD:", data)
+        return {"status": "done"}
 
-    return {"status": "ok"}
-
-
-
+    return {"status": "unknown_step"}
