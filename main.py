@@ -21,7 +21,6 @@ def incoming_sms(request: Request):
     if not raw_phone or not txt:
         return {"status": "ignored"}
 
-    # Normaliser telefonnummer
     if raw_phone.startswith("00"):
         phonern = "+" + raw_phone[2:]
     else:
@@ -32,6 +31,14 @@ def incoming_sms(request: Request):
     state = get_state(phonern)
     step = state["step"]
     data = state["data"]
+
+    if step == "start":
+        update_state(phonern, "problem", {})
+        send_sms(
+            phonern,
+            "Hei! Hva gjelder henvendelsen?"
+        )
+        return {"status": "started"}
 
     if step == "problem":
         data["problem"] = txt
@@ -63,3 +70,5 @@ def incoming_sms(request: Request):
         print("FULL LEAD:", data)
 
     return {"status": "ok"}
+
+
