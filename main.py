@@ -5,20 +5,19 @@ from conversation import get_state, update_state
 
 app = FastAPI()
 
+# Environment variables
 PLUMBER_PHONE = os.getenv("PLUMBER_PHONE")
 
 if not PLUMBER_PHONE:
     print("⚠️ ADVARSEL: PLUMBER_PHONE er ikke satt")
 
-
-
 @app.get("/")
 def health():
     return {"status": "ok"}
 
-
 @app.post("/incoming-sms")
 async def incoming_sms(request: Request):
+    # Twilio sender application/x-www-form-urlencoded
     form = await request.form()
     params = dict(form)
 
@@ -37,14 +36,6 @@ async def incoming_sms(request: Request):
 
     phone = raw_phone.strip()
     txt = txt.strip()
-    if txt.upper() == "NY":
-    update_state(phone, "start", {})
-    send_sms(
-        phone,
-        "OK 👍 Hva kan vi hjelpe deg med?"
-    )
-    return {"status": "reset"}
-
 
     state = get_state(phone)
     step = state["step"]
@@ -53,8 +44,7 @@ async def incoming_sms(request: Request):
     print("STEP:", step)
     print("DATA FØR:", data)
 
-    # ---------- SAMTALEFLYT ----------
-
+    # --- START ---
     if step == "start":
         update_state(phone, "problem", {})
         send_sms(
@@ -63,6 +53,7 @@ async def incoming_sms(request: Request):
         )
         return {"status": "started"}
 
+    # --- PROBLEM ---
     if step == "problem":
         data["problem"] = txt
         update_state(phone, "adresse", data)
@@ -70,8 +61,9 @@ async def incoming_sms(request: Request):
             phone,
             "Takk! Hvor gjelder dette? (adresse eller område)"
         )
-        return {"status": "problem_received"}
+        return {"status": "problem_saved"}
 
+    # --- ADRESSE ---
     if step == "adresse":
         data["adresse"] = txt
         update_state(phone, "tidspunkt", data)
@@ -82,8 +74,9 @@ async def incoming_sms(request: Request):
             "2️⃣ I dag\n"
             "3️⃣ Senere"
         )
-        return {"status": "adresse_received"}
+        return {"status": "adresse_saved"}
 
+    # --- TIDSPUNKT ---
     if step == "tidspunkt":
         data["tidspunkt"] = txt
         update_state(phone, "done", data)
@@ -94,32 +87,30 @@ async def incoming_sms(request: Request):
             "Supert 👍 Vi har mottatt henvendelsen din og kontakter deg snart."
         )
 
-        # Varsel til rørlegger
-        if PLUMBER_PHONE:
-            lead_text = (
-                "🔧 NYTT OPPDRAG\n\n"
-                f"📞 Telefon: {phone}\n"
-                f"❗ Problem: {data['problem']}\n"
-                f"📍 Adresse: {data['adresse']}\n"
-                f"⏱ Tidspunkt: {data['tidspunkt']}"
-            )
-            send_sms(PLUMBER_PHONE, lead_text)
+        # Send lead til rørlegger
+        lead_text = (
+            "🔧 NYTT OPPDRAG\n\n"
+            f"📞 Telefon: {phone}\n"
+            f"❗ Problem: {data.get('problem')}\n"
+            f"📍 Adresse: {data.get('adresse')}\n"
+            f"⏰ Tidspunkt: {data.get('tidspunkt')}"
+        )
+
+        send_sms(PLUMBER_PHONE, lead_text)
 
         print("FERDIG LEAD:", {
             "telefon": phone,
             **data
         })
 
-        return {"status": "lead_complete"}
+        return {"status": "completed"}
 
+    # --- DONE ---
     if step == "done":
         send_sms(
             phone,
-            "Vi har allerede mottatt henvendelsen din 😊 "
-            "Hvis du har en ny sak, skriv NY."
+            "Vi har allerede mottatt henvendelsen 👍"
         )
         return {"status": "already_done"}
 
-    return {"status": "ok"}
-
-
+    return {"status": "unknown_state"}
