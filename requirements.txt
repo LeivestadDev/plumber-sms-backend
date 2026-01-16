@@ -2,4 +2,6 @@ fastapi
 uvicorn
 requests
 python-multipart
+twilio
+
 
