@@ -31,12 +31,14 @@ async def incoming_sms(request: Request):
     phone = raw_phone.strip()
     txt = txt.strip()
 
-        state = get_state(phone)
+    state = get_state(phone)
     step = state["step"]
     data = state["data"]
 
     print("STEP:", step)
     print("DATA FØR:", data)
+
+    # ---- SAMTALEFLYT ----
 
     if step == "start":
         update_state(phone, "problem", {})
@@ -49,7 +51,6 @@ async def incoming_sms(request: Request):
     if step == "problem":
         data["problem"] = txt
         update_state(phone, "adresse", data)
-
         send_sms(
             phone,
             "Takk! Hvor gjelder dette? (adresse eller område)"
@@ -59,7 +60,6 @@ async def incoming_sms(request: Request):
     if step == "adresse":
         data["adresse"] = txt
         update_state(phone, "tidspunkt", data)
-
         send_sms(
             phone,
             "Når trenger du hjelp?\n"
@@ -72,7 +72,6 @@ async def incoming_sms(request: Request):
     if step == "tidspunkt":
         data["tidspunkt"] = txt
         update_state(phone, "done", data)
-
         send_sms(
             phone,
             "Supert 👍 Vi har mottatt henvendelsen din og kontakter deg snart."
@@ -85,4 +84,12 @@ async def incoming_sms(request: Request):
 
         return {"status": "lead_complete"}
 
+    if step == "done":
+        send_sms(
+            phone,
+            "Vi har allerede mottatt henvendelsen din 😊 "
+            "Hvis du har en ny sak, skriv NY."
+        )
+        return {"status": "already_done"}
 
+    return {"status": "ok"}
