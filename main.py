@@ -31,48 +31,58 @@ async def incoming_sms(request: Request):
     phone = raw_phone.strip()
     txt = txt.strip()
 
-    state = get_state(phone)
+        state = get_state(phone)
     step = state["step"]
     data = state["data"]
 
     print("STEP:", step)
     print("DATA FØR:", data)
 
-    # FØRSTE MELDING
     if step == "start":
         update_state(phone, "problem", {})
         send_sms(
             phone,
-            "Hei! 👋 Hva gjelder henvendelsen?"
+            "Hei! 👋 Hva kan vi hjelpe deg med i dag?"
         )
         return {"status": "started"}
 
     if step == "problem":
         data["problem"] = txt
         update_state(phone, "adresse", data)
+
         send_sms(
             phone,
-            "Takk. Hvor gjelder dette? (adresse eller område)"
+            "Takk! Hvor gjelder dette? (adresse eller område)"
         )
         return {"status": "problem_received"}
 
     if step == "adresse":
         data["adresse"] = txt
         update_state(phone, "tidspunkt", data)
+
         send_sms(
             phone,
-            "Når trenger du hjelp?\n1️⃣ Akutt\n2️⃣ I dag\n3️⃣ Senere"
+            "Når trenger du hjelp?\n"
+            "1️⃣ Akutt\n"
+            "2️⃣ I dag\n"
+            "3️⃣ Senere"
         )
         return {"status": "adresse_received"}
 
     if step == "tidspunkt":
         data["tidspunkt"] = txt
         update_state(phone, "done", data)
+
         send_sms(
             phone,
-            "Takk! Vi tar kontakt straks."
+            "Supert 👍 Vi har mottatt henvendelsen din og kontakter deg snart."
         )
-        print("FULL LEAD:", data)
-        return {"status": "done"}
 
-    return {"status": "ok"}
+        print("FERDIG LEAD:", {
+            "telefon": phone,
+            **data
+        })
+
+        return {"status": "lead_complete"}
+
+
