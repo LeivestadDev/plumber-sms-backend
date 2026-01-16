@@ -69,27 +69,35 @@ async def incoming_sms(request: Request):
         )
         return {"status": "adresse_received"}
 
-    if step == "tidspunkt":
-        data["tidspunkt"] = txt
-        update_state(phone, "done", data)
-        send_sms(
-            phone,
-            "Supert 👍 Vi har mottatt henvendelsen din og kontakter deg snart."
-        )
+    import os
 
-        print("FERDIG LEAD:", {
-            "telefon": phone,
-            **data
-        })
+PLUMBER_PHONE = os.getenv("PLUMBER_PHONE")
 
-        return {"status": "lead_complete"}
+if step == "tidspunkt":
+    data["tidspunkt"] = txt
+    update_state(phone, "done", data)
 
-    if step == "done":
-        send_sms(
-            phone,
-            "Vi har allerede mottatt henvendelsen din 😊 "
-            "Hvis du har en ny sak, skriv NY."
-        )
-        return {"status": "already_done"}
+    # Bekreftelse til kunde
+    send_sms(
+        phone,
+        "Supert 👍 Vi har mottatt henvendelsen din og kontakter deg snart."
+    )
 
-    return {"status": "ok"}
+    # Varsel til rørlegger
+    lead_text = (
+        "🔧 NY LEAD\n\n"
+        f"📞 Telefon: {phone}\n"
+        f"❗ Problem: {data['problem']}\n"
+        f"📍 Adresse: {data['adresse']}\n"
+        f"⏱ Tidspunkt: {data['tidspunkt']}"
+    )
+
+    send_sms(PLUMBER_PHONE, lead_text)
+
+    print("FERDIG LEAD:", {
+        "telefon": phone,
+        **data
+    })
+
+    return {"status": "lead_complete"}
+
