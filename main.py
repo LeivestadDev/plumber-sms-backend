@@ -7,6 +7,10 @@ app = FastAPI()
 
 PLUMBER_PHONE = os.getenv("PLUMBER_PHONE")
 
+if not PLUMBER_PHONE:
+    print("⚠️ ADVARSEL: PLUMBER_PHONE er ikke satt")
+
+
 
 @app.get("/")
 def health():
@@ -109,3 +113,4 @@ async def incoming_sms(request: Request):
         return {"status": "already_done"}
 
     return {"status": "ok"}
+
