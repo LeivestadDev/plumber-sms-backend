@@ -37,6 +37,14 @@ async def incoming_sms(request: Request):
 
     phone = raw_phone.strip()
     txt = txt.strip()
+    if txt.upper() == "NY":
+    update_state(phone, "start", {})
+    send_sms(
+        phone,
+        "OK 👍 Hva kan vi hjelpe deg med?"
+    )
+    return {"status": "reset"}
+
 
     state = get_state(phone)
     step = state["step"]
@@ -89,7 +97,7 @@ async def incoming_sms(request: Request):
         # Varsel til rørlegger
         if PLUMBER_PHONE:
             lead_text = (
-                "🔧 NY LEAD\n\n"
+                "🔧 NYTT OPPDRAG\n\n"
                 f"📞 Telefon: {phone}\n"
                 f"❗ Problem: {data['problem']}\n"
                 f"📍 Adresse: {data['adresse']}\n"
@@ -113,4 +121,5 @@ async def incoming_sms(request: Request):
         return {"status": "already_done"}
 
     return {"status": "ok"}
+
 
