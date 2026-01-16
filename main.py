@@ -1,8 +1,11 @@
+import os
 from fastapi import FastAPI, Request
 from sms import send_sms
 from conversation import get_state, update_state
 
 app = FastAPI()
+
+PLUMBER_PHONE = os.getenv("PLUMBER_PHONE")
 
 
 @app.get("/")
@@ -38,7 +41,7 @@ async def incoming_sms(request: Request):
     print("STEP:", step)
     print("DATA FØR:", data)
 
-    # ---- SAMTALEFLYT ----
+    # ---------- SAMTALEFLYT ----------
 
     if step == "start":
         update_state(phone, "problem", {})
@@ -69,35 +72,40 @@ async def incoming_sms(request: Request):
         )
         return {"status": "adresse_received"}
 
-    import os
+    if step == "tidspunkt":
+        data["tidspunkt"] = txt
+        update_state(phone, "done", data)
 
-PLUMBER_PHONE = os.getenv("PLUMBER_PHONE")
+        # Bekreftelse til kunde
+        send_sms(
+            phone,
+            "Supert 👍 Vi har mottatt henvendelsen din og kontakter deg snart."
+        )
 
-if step == "tidspunkt":
-    data["tidspunkt"] = txt
-    update_state(phone, "done", data)
+        # Varsel til rørlegger
+        if PLUMBER_PHONE:
+            lead_text = (
+                "🔧 NY LEAD\n\n"
+                f"📞 Telefon: {phone}\n"
+                f"❗ Problem: {data['problem']}\n"
+                f"📍 Adresse: {data['adresse']}\n"
+                f"⏱ Tidspunkt: {data['tidspunkt']}"
+            )
+            send_sms(PLUMBER_PHONE, lead_text)
 
-    # Bekreftelse til kunde
-    send_sms(
-        phone,
-        "Supert 👍 Vi har mottatt henvendelsen din og kontakter deg snart."
-    )
+        print("FERDIG LEAD:", {
+            "telefon": phone,
+            **data
+        })
 
-    # Varsel til rørlegger
-    lead_text = (
-        "🔧 NY LEAD\n\n"
-        f"📞 Telefon: {phone}\n"
-        f"❗ Problem: {data['problem']}\n"
-        f"📍 Adresse: {data['adresse']}\n"
-        f"⏱ Tidspunkt: {data['tidspunkt']}"
-    )
+        return {"status": "lead_complete"}
 
-    send_sms(PLUMBER_PHONE, lead_text)
+    if step == "done":
+        send_sms(
+            phone,
+            "Vi har allerede mottatt henvendelsen din 😊 "
+            "Hvis du har en ny sak, skriv NY."
+        )
+        return {"status": "already_done"}
 
-    print("FERDIG LEAD:", {
-        "telefon": phone,
-        **data
-    })
-
-    return {"status": "lead_complete"}
-
+    return {"status": "ok"}
