@@ -5,70 +5,104 @@ from conversation import get_state, update_state
 
 app = FastAPI()
 
-# Environment variables
-PLUMBER_PHONE = os.getenv("PLUMBER_PHONE")
+# =========================
+# KUNDEKONFIGURASJON (A)
+# =========================
+# Nøkkel = Twilio-nummer kunden sendte SMS til
+# Legg til ny kunde ved å legge til én ny blokk her
+CUSTOMERS = {
+    "+46734745108": {
+        "company": "Bergen Rør AS",
+        "plumber_phone": "+4795330248",
+        "calendly": "https://calendly.com/aune-leivestad/befaring-rorleggerhjelp"
+    }
+}
 
-if not PLUMBER_PHONE:
-    print("⚠️ ADVARSEL: PLUMBER_PHONE er ikke satt")
-
+# =========================
+# HEALTH CHECK
+# =========================
 @app.get("/")
 def health():
     return {"status": "ok"}
 
+# =========================
+# INCOMING SMS (TWILIO)
+# =========================
 @app.post("/incoming-sms")
 async def incoming_sms(request: Request):
-    # Twilio sender application/x-www-form-urlencoded
     form = await request.form()
     params = dict(form)
 
     print("=== INNKOMMENDE SMS (TWILIO) ===")
     print("RAW PARAMS:", params)
 
-    raw_phone = params.get("From")
+    from_phone = params.get("From")
+    to_number = params.get("To")
     txt = params.get("Body")
 
-    print("RAW_PHONE:", raw_phone)
-    print("TXT:", txt)
-
-    if not raw_phone or not txt:
-        print("Mangler nummer eller tekst – ignorerer")
+    if not from_phone or not to_number or not txt:
+        print("Mangler From / To / Body – ignorerer")
         return {"status": "ignored"}
 
-    phone = raw_phone.strip()
+    from_phone = from_phone.strip()
+    to_number = to_number.strip()
     txt = txt.strip()
 
-    state = get_state(phone)
+    print("FROM:", from_phone)
+    print("TO:", to_number)
+    print("TXT:", txt)
+
+    # Finn riktig kunde basert på Twilio-nummer
+    customer = CUSTOMERS.get(to_number)
+    if not customer:
+        print("❌ Ingen kunde funnet for nummer:", to_number)
+        return {"status": "unknown_number"}
+
+    plumber_phone = customer["plumber_phone"]
+    calendly_url = customer["calendly"]
+    company = customer["company"]
+
+    # Hent samtalestatus
+    state = get_state(from_phone)
     step = state["step"]
     data = state["data"]
 
     print("STEP:", step)
     print("DATA FØR:", data)
 
-    # --- START ---
-    if step == "start":
-        update_state(phone, "problem", {})
-        send_sms(
-            phone,
-            "Hei! 👋 Hva kan vi hjelpe deg med i dag?"
-        )
-        return {"status": "started"}
+    # =========================
+    # RESET
+    # =========================
+    if txt.upper() == "NY":
+        update_state(from_phone, "start", {})
+        send_sms(from_phone, "OK 👍 Hva kan vi hjelpe deg med?")
+        return {"status": "reset"}
 
-    # --- PROBLEM ---
+    # =========================
+    # START
+    # =========================
+    if step == "start":
+        update_state(from_phone, "problem", {})
+        send_sms(from_phone, "Hei! 👋 Hva kan vi hjelpe deg med i dag?")
+        return {"status": "start"}
+
+    # =========================
+    # PROBLEM
+    # =========================
     if step == "problem":
         data["problem"] = txt
-        update_state(phone, "adresse", data)
-        send_sms(
-            phone,
-            "Takk! Hvor gjelder dette? (adresse eller område)"
-        )
+        update_state(from_phone, "adresse", data)
+        send_sms(from_phone, "Takk! Hvor gjelder dette? (adresse eller område)")
         return {"status": "problem_saved"}
 
-    # --- ADRESSE ---
+    # =========================
+    # ADRESSE
+    # =========================
     if step == "adresse":
         data["adresse"] = txt
-        update_state(phone, "tidspunkt", data)
+        update_state(from_phone, "tidspunkt", data)
         send_sms(
-            phone,
+            from_phone,
             "Når trenger du hjelp?\n"
             "1️⃣ Akutt\n"
             "2️⃣ I dag\n"
@@ -76,41 +110,53 @@ async def incoming_sms(request: Request):
         )
         return {"status": "adresse_saved"}
 
-    # --- TIDSPUNKT ---
+    # =========================
+    # TIDSPUNKT
+    # =========================
     if step == "tidspunkt":
+        tidspunkt = txt.lower()
         data["tidspunkt"] = txt
-        update_state(phone, "done", data)
+        update_state(from_phone, "done", data)
 
-        # Bekreftelse til kunde
+        # Bekreftelse til kunde (alltid)
         send_sms(
-            phone,
-            "Supert 👍 Vi har mottatt henvendelsen din og kontakter deg snart."
+            from_phone,
+            "Takk 👍 Vi har mottatt henvendelsen din."
         )
 
-        # Send lead til rørlegger
-        lead_text = (
-            "🔧 NYTT OPPDRAG\n\n"
-            f"📞 Telefon: {phone}\n"
-            f"❗ Problem: {data.get('problem')}\n"
-            f"📍 Adresse: {data.get('adresse')}\n"
-            f"⏰ Tidspunkt: {data.get('tidspunkt')}"
-        )
+        # AKUTT → direkte SMS til rørlegger
+        if "akutt" in tidspunkt:
+            plumber_msg = (
+                f"🚨 AKUTT OPPDRAG – {company}\n\n"
+                f"📞 Telefon: {from_phone}\n"
+                f"❗ Problem: {data['problem']}\n"
+                f"📍 Adresse: {data['adresse']}"
+            )
+            send_sms(plumber_phone, plumber_msg)
 
-        send_sms(PLUMBER_PHONE, lead_text)
+        # I DAG / SENERE → send Calendly til kunde
+        else:
+            send_sms(
+                from_phone,
+                "Hvis du ønsker kan du foreslå ønsket tidspunkt her:\n"
+                f"{calendly_url}\n\n"
+                "Merk: tidspunktet bekreftes av rørlegger før det er endelig."
+            )
 
-        print("FERDIG LEAD:", {
-            "telefon": phone,
+        print("=== FERDIG LEAD ===")
+        print({
+            "kunde": company,
+            "telefon": from_phone,
             **data
         })
 
         return {"status": "completed"}
 
-    # --- DONE ---
+    # =========================
+    # DONE
+    # =========================
     if step == "done":
-        send_sms(
-            phone,
-            "Vi har allerede mottatt henvendelsen 👍"
-        )
-        return {"status": "already_done"}
+        send_sms(from_phone, "Vi har allerede mottatt henvendelsen 👍")
+        return {"status": "done"}
 
     return {"status": "unknown_state"}
