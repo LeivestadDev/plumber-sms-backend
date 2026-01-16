@@ -1,26 +1,16 @@
 import os
-import requests
-from requests.auth import HTTPBasicAuth
+from twilio.rest import Client
 
-FRONT_API_URL = "https://www.pling.as/psk/push.php"
+account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+from_number = os.getenv("TWILIO_NUMBER")
 
-SERVICE_ID = os.getenv("FRONT_SERVICE_ID")
-PASSWORD = os.getenv("FRONT_GATEWAY_PASSWORD")
-SENDER = os.getenv("SENDER_NUMBER")
+client = Client(account_sid, auth_token)
 
 def send_sms(to: str, message: str):
-    payload = {
-        "serviceid": SERVICE_ID,
-        "fromid": SENDER,
-        "phoneno": to,
-        "txt": message
-    }
-
-    response = requests.post(
-        FRONT_API_URL,
-        data=payload,  # VIKTIG: data, ikke json
-        auth=HTTPBasicAuth(SERVICE_ID, PASSWORD),
-        timeout=10
+    msg = client.messages.create(
+        to=to,
+        from_=from_number,
+        body=message
     )
-
-    print("FRONT RESPONSE:", response.status_code, response.text)
+    print("TWILIO MESSAGE SID:", msg.sid)
