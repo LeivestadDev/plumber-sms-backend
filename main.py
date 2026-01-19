@@ -4,18 +4,17 @@ from twilio.rest import Client
 
 app = FastAPI()
 
-# ========= ENV =========
+# ===== ENV =====
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_NUMBER = os.getenv("TWILIO_NUMBER")
-
 PLUMBER_PHONE = os.getenv("PLUMBER_PHONE")
 
 CALENDLY_LINK = "https://calendly.com/svardirekte/befaring-rorleggerhjelp"
 
 client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
-# ========= STATE =========
+# ===== STATE =====
 STATE = {}
 
 def send_sms(to, msg):
@@ -27,9 +26,11 @@ def send_sms(to, msg):
 
 def is_akutt(text):
     text = text.lower()
-    return any(word in text for word in [
-        "akutt", "1", "nå", "med en gang", "haste", "haster", "lekkasje"
-    ])
+    return text in ["1", "akutt"]
+
+def is_ikke_akutt(text):
+    text = text.lower()
+    return text in ["2", "3", "i dag", "idag", "senere"]
 
 @app.post("/incoming-sms")
 async def incoming_sms(request: Request):
@@ -42,26 +43,52 @@ async def incoming_sms(request: Request):
 
     txt = txt.strip()
 
-    state = STATE.get(from_phone, {"step": "start", "data": {}})
-    step = state["step"]
-    data = state["data"]
+    state = STATE.get(from_phone)
 
-    # === START ===
-    if step == "start":
-        STATE[from_phone] = {"step": "problem", "data": {}}
+    # ===== START =====
+    if not state:
+        STATE[from_phone] = {
+            "step": "problem",
+            "data": {}
+        }
         send_sms(from_phone, "Hei! Hva kan vi hjelpe deg med i dag?")
         return {"status": "ok"}
 
-    # === PROBLEM ===
+    step = state["step"]
+    data = state["data"]
+
+    # ===== PROBLEM =====
     if step == "problem":
         data["problem"] = txt
+        STATE[from_phone]["step"] = "adresse"
+        send_sms(from_phone, "Hvor gjelder dette? (adresse)")
+        return {"status": "ok"}
 
+    # ===== ADRESSE =====
+    if step == "adresse":
+        data["adresse"] = txt
+        STATE[from_phone]["step"] = "tidspunkt"
+        send_sms(
+            from_phone,
+            "Når trenger du hjelp?\n\n"
+            "1 = Akutt\n"
+            "2 = I dag\n"
+            "3 = Senere"
+        )
+        return {"status": "ok"}
+
+    # ===== TIDSPUNKT =====
+    if step == "tidspunkt":
+        data["tidspunkt"] = txt.lower()
+
+        # 🔴 AKUTT
         if is_akutt(txt):
             send_sms(
                 PLUMBER_PHONE,
                 "🚨 AKUTT OPPDRAG\n\n"
                 f"📞 {from_phone}\n"
-                f"❗ {data['problem']}"
+                f"❗ {data['problem']}\n"
+                f"📍 {data['adresse']}"
             )
             send_sms(
                 from_phone,
@@ -70,50 +97,26 @@ async def incoming_sms(request: Request):
             STATE.pop(from_phone, None)
             return {"status": "ok"}
 
-        STATE[from_phone] = {"step": "adresse", "data": data}
-        send_sms(from_phone, "Hvor gjelder dette? (adresse)")
-        return {"status": "ok"}
-
-    # === ADRESSE ===
-    if step == "adresse":
-        data["adresse"] = txt
-        STATE[from_phone] = {"step": "tidspunkt", "data": data}
-        send_sms(
-            from_phone,
-            "Når trenger du hjelp?\n\n"
-            "Skriv f.eks:\n"
-            "• i dag\n"
-            "• senere\n"
-            "• 1 = akutt"
-        )
-        return {"status": "ok"}
-
-    # === TIDSPUNKT ===
-    if step == "tidspunkt":
-        data["tidspunkt"] = txt
-
-        send_sms(
-            PLUMBER_PHONE,
-            "📩 NY FORESPØRSEL\n\n"
-            f"📞 {from_phone}\n"
-            f"❗ {data['problem']}\n"
-            f"📍 {data['adresse']}\n"
-            f"⏰ {data['tidspunkt']}"
-        )
-
-        send_sms(
-            from_phone,
-            (
-                "Takk! Henvendelsen er sendt videre.\n\n"
-                "Ønsker du å booke selv kan du bruke denne lenken:\n"
-                "https://calendly.com/svardirekte/befaring-rorleggerhjelp"
+        # 🟢 IKKE AKUTT → CALENDLY
+        if is_ikke_akutt(txt):
+            send_sms(
+                from_phone,
+                (
+                    "Takk! Henvendelsen er mottatt.\n\n"
+                    "Du kan selv velge tidspunkt her:\n"
+                    "https://calendly.com/svardirekte/befaring-rorleggerhjelp"
+                )
             )
+            STATE.pop(from_phone, None)
+            return {"status": "ok"}
+
+        # ⚠️ UKJENT SVAR
+        send_sms(
+            from_phone,
+            "Jeg forsto ikke svaret.\n\n"
+            "Svar med:\n"
+            "1 = Akutt\n"
+            "2 = I dag\n"
+            "3 = Senere"
         )
-
-        STATE.pop(from_phone, None)
         return {"status": "ok"}
-
-    # fallback
-    STATE.pop(from_phone, None)
-    send_sms(from_phone, "La oss starte på nytt. Hva kan vi hjelpe deg med?")
-    return {"status": "ok"}
