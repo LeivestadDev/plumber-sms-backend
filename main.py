@@ -1,151 +1,188 @@
 from fastapi import FastAPI, Request
-from sms import send_sms
-from conversation import get_state, update_state
-
+from twilio.rest import Client
 import os
 
 app = FastAPI()
 
-# Miljøvariabler
-PLUMBER_PHONE = os.getenv("PLUMBER_PHONE")
-COMPANY_NAME = os.getenv("COMPANY_NAME", "SvarDirekte")
+# =========================
+# ENV / TWILIO
+# =========================
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_NUMBER = os.getenv("TWILIO_NUMBER")
 
-if not PLUMBER_PHONE:
-    print("⚠️ ADVARSEL: PLUMBER_PHONE er ikke satt i environment variables")
+client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
+# =========================
+# MIDLERLIG STATE (kan byttes til DB senere)
+# =========================
+STATE = {}
 
-@app.get("/")
-def health():
-    return {"status": "ok"}
+def get_state(phone):
+    return STATE.get(phone, {
+        "step": "start",
+        "data": {}
+    })
 
+def update_state(phone, step, data):
+    STATE[phone] = {
+        "step": step,
+        "data": data
+    }
 
+def clear_state(phone):
+    if phone in STATE:
+        del STATE[phone]
+
+# =========================
+# SMS SENDER
+# =========================
+def send_sms(to, message):
+    client.messages.create(
+        from_=TWILIO_NUMBER,
+        to=to,
+        body=message
+    )
+
+# =========================
+# AKUTT DETEKSJON
+# =========================
+def is_acute(txt):
+    keywords = [
+        "akutt", "haste", "nødhjelp", "krise",
+        "lekkasje", "vann overalt", "sprukket rør"
+    ]
+    return txt == "1" or any(word in txt for word in keywords)
+
+# =========================
+# WEBHOOK
+# =========================
 @app.post("/incoming-sms")
 async def incoming_sms(request: Request):
     form = await request.form()
     params = dict(form)
 
-    print("=== INNKOMMENDE SMS ===")
-    print("RAW PARAMS:", params)
-
     from_phone = params.get("From")
     txt = params.get("Body")
 
-    print("RAW_PHONE:", from_phone)
+    print("=== INNKOMMENDE SMS ===")
+    print("FROM:", from_phone)
     print("TXT:", txt)
 
     if not from_phone or not txt:
-        print("Mangler nummer eller tekst – ignorerer")
         return {"status": "ignored"}
 
-    # Normaliser nummer
-    phone = from_phone.strip()
+    txt = txt.strip().lower()
 
-    # Hent samtalestatus
-    state = get_state(phone)
+    state = get_state(from_phone)
     step = state["step"]
     data = state["data"]
 
-    print("STEP:", step)
-    print("DATA FØR:", data)
+    # =========================
+    # START / NY SAMTALE
+    # =========================
+    if step == "start":
+        update_state(from_phone, "problem", {})
+        send_sms(
+            from_phone,
+            "Hei! 👋\nHva kan vi hjelpe deg med i dag?\n\n"
+            "Beskriv problemet kort.\n"
+            "Skriv *1* eller *akutt* hvis det haster 🚨"
+        )
+        return {"status": "ok"}
 
-    txt_clean = txt.strip()
+    # =========================
+    # AKUTT – FUNKER OVERALT
+    # =========================
+    if is_acute(txt):
+        company = "Rørlegger"
+        plumber_phone = os.getenv("PLUMBER_PHONE")
 
-    # === STEG 1: PROBLEM ===
+        plumber_msg = (
+            f"🚨 AKUTT OPPDRAG – {company}\n\n"
+            f"📞 Telefon: {from_phone}\n"
+            f"❗ Problem: {data.get('problem', 'Ikke spesifisert')}\n"
+            f"📍 Adresse: {data.get('adresse', 'Ukjent')}"
+        )
+
+        if plumber_phone:
+            send_sms(plumber_phone, plumber_msg)
+
+        send_sms(
+            from_phone,
+            "🚨 Takk! Dette er registrert som AKUTT.\n"
+            "Rørlegger blir varslet umiddelbart."
+        )
+
+        clear_state(from_phone)
+        return {"status": "ok"}
+
+    # =========================
+    # STEG 1 – PROBLEM
+    # =========================
     if step == "problem":
-        data["problem"] = txt_clean
-        update_state(phone, "adresse", data)
+        data["problem"] = txt
+        update_state(from_phone, "adresse", data)
 
         send_sms(
-            phone,
-            "Takk. Hvor gjelder dette? (adresse eller område)"
+            from_phone,
+            "Takk 👍\nHva er adressen?"
         )
-
         return {"status": "ok"}
 
-    # === STEG 2: ADRESSE ===
+    # =========================
+    # STEG 2 – ADRESSE
+    # =========================
     if step == "adresse":
-        data["adresse"] = txt_clean
-        update_state(phone, "tidspunkt", data)
+        data["adresse"] = txt
+        update_state(from_phone, "tidspunkt", data)
 
         send_sms(
-            phone,
-            "Når trenger du hjelp?\n"
-            "1️⃣ Akutt\n"
-            "2️⃣ I dag\n"
-            "3️⃣ Senere"
+            from_phone,
+            "Når ønsker du hjelp?\n\n"
+            "Skriv f.eks:\n"
+            "• I dag\n"
+            "• I morgen\n"
+            "• 1 = Akutt "
         )
-
         return {"status": "ok"}
 
-    # === STEG 3: TIDSPUNKT ===
+    # =========================
+    # STEG 3 – TIDSPUNKT
+    # =========================
     if step == "tidspunkt":
-        tidspunkt_raw = txt_clean
-        tidspunkt = txt_clean.lower()
+        data["tidspunkt"] = txt
 
-        # Alle ord som betyr AKUTT
-        AKUTT_KEYWORDS = [
-            "akutt",
-            "haster",
-            "haste",
-            "nå",
-            "snarest",
-            "med en gang",
-            "lekkasje",
-            "vannlekkasje",
-            "sprukket",
-            "oversvømmelse",
-            "renner",
-            "flom"
-        ]
+        company = "Rørlegger"
+        plumber_phone = os.getenv("PLUMBER_PHONE")
 
-        er_akutt = (
-            tidspunkt == "1"
-            or any(word in tidspunkt for word in AKUTT_KEYWORDS)
+        plumber_msg = (
+            f"📩 AKUTT OPPDRAG 🚨 – {company}\n\n"
+            f"📞 Telefon: {from_phone}\n"
+            f"❗ Problem: {data['problem']}\n"
+            f"📍 Adresse: {data['adresse']}\n"
+            f"⏰ Tidspunkt: {data['tidspunkt']}"
         )
 
-        data["tidspunkt"] = tidspunkt_raw
-        update_state(phone, "done", data)
+        if plumber_phone:
+            send_sms(plumber_phone, plumber_msg)
 
-        # === AKUTT → VARSEL TIL RØRLEGGER ===
-        if er_akutt:
-            plumber_msg = (
-                f"🚨 AKUTT OPPDRAG – {COMPANY_NAME}\n\n"
-                f"📞 Telefon: {phone}\n"
-                f"❗ Problem: {data['problem']}\n"
-                f"📍 Adresse: {data['adresse']}\n\n"
-                f"⏱️ Kundens svar: {tidspunkt_raw}"
-            )
+        send_sms(
+            from_phone,
+            "Takk! 👌\nForespørselen er sendt videre.\n"
+            "Du blir kontaktet snart."
+        )
 
-            send_sms(PLUMBER_PHONE, plumber_msg)
-
-            print("🚨 AKUTT OPPDRAG SENDT")
-
-            send_sms(
-                phone,
-                "Takk! Vi har varslet rørleggeren. "
-                "Du vil bli kontaktet så raskt som mulig."
-            )
-
-        # === IKKE AKUTT → CALENDLY ===
-        else:
-            send_sms(
-                phone,
-                "Takk! Du kan foreslå tidspunkt her:\n"
-                "https://calendly.com/svardirekte/befaring-rorleggerhjelp"
-            )
-
-        print("FERDIG LEAD:", {
-            "telefon": phone,
-            **data
-        })
-
+        clear_state(from_phone)
         return {"status": "ok"}
 
-    # === FALLBACK ===
+    # =========================
+    # FALLBACK (SISTE SIKRING)
+    # =========================
+    update_state(from_phone, "start", {})
     send_sms(
-        phone,
-        "Hei! Kan du kort beskrive hva det gjelder?"
+        from_phone,
+        "Hei! 👋\nLa oss starte på nytt.\n"
+        "Hva kan vi hjelpe deg med?"
     )
-    update_state(phone, "problem", {})
-
     return {"status": "ok"}
