@@ -1,163 +1,151 @@
-import os
 from fastapi import FastAPI, Request
 from sms import send_sms
 from conversation import get_state, update_state
 
+import os
+
 app = FastAPI()
 
-# =========================
-# KUNDEKONFIGURASJON (A)
-# =========================
-# Nøkkel = Twilio-nummer kunden sendte SMS til
-# Legg til ny kunde ved å legge til én ny blokk her
-CUSTOMERS = {
-    "+46734745108": {
-        "company": "Bergen Rør AS",
-        "plumber_phone": "+4795330248",
-        "calendly": "https://calendly.com/svardirekte/befaring-rorleggerhjelp"
-    }
-}
+# Miljøvariabler
+PLUMBER_PHONE = os.getenv("PLUMBER_PHONE")
+COMPANY_NAME = os.getenv("COMPANY_NAME", "SvarDirekte")
 
-# =========================
-# HEALTH CHECK
-# =========================
+if not PLUMBER_PHONE:
+    print("⚠️ ADVARSEL: PLUMBER_PHONE er ikke satt i environment variables")
+
+
 @app.get("/")
 def health():
     return {"status": "ok"}
 
-# =========================
-# INCOMING SMS (TWILIO)
-# =========================
+
 @app.post("/incoming-sms")
 async def incoming_sms(request: Request):
     form = await request.form()
     params = dict(form)
 
-    print("=== INNKOMMENDE SMS (TWILIO) ===")
+    print("=== INNKOMMENDE SMS ===")
     print("RAW PARAMS:", params)
 
     from_phone = params.get("From")
-    to_number = params.get("To")
     txt = params.get("Body")
 
-    if not from_phone or not to_number or not txt:
-        print("Mangler From / To / Body – ignorerer")
-        return {"status": "ignored"}
-
-    from_phone = from_phone.strip()
-    to_number = to_number.strip()
-    txt = txt.strip()
-
-    print("FROM:", from_phone)
-    print("TO:", to_number)
+    print("RAW_PHONE:", from_phone)
     print("TXT:", txt)
 
-    # Finn riktig kunde basert på Twilio-nummer
-    customer = CUSTOMERS.get(to_number)
-    if not customer:
-        print("❌ Ingen kunde funnet for nummer:", to_number)
-        return {"status": "unknown_number"}
+    if not from_phone or not txt:
+        print("Mangler nummer eller tekst – ignorerer")
+        return {"status": "ignored"}
 
-    plumber_phone = customer["plumber_phone"]
-    calendly_url = customer["calendly"]
-    company = customer["company"]
+    # Normaliser nummer
+    phone = from_phone.strip()
 
     # Hent samtalestatus
-    state = get_state(from_phone)
+    state = get_state(phone)
     step = state["step"]
     data = state["data"]
 
     print("STEP:", step)
     print("DATA FØR:", data)
 
-    # =========================
-    # RESET
-    # =========================
-    if txt.upper() == "NY":
-        update_state(from_phone, "start", {})
-        send_sms(from_phone, "OK 👍 Hva kan vi hjelpe deg med?")
-        return {"status": "reset"}
+    txt_clean = txt.strip()
 
-    # =========================
-    # START
-    # =========================
-    if step == "start":
-        update_state(from_phone, "problem", {})
-        send_sms(from_phone, "Hei! 👋 Hva kan vi hjelpe deg med i dag?")
-        return {"status": "start"}
-
-    # =========================
-    # PROBLEM
-    # =========================
+    # === STEG 1: PROBLEM ===
     if step == "problem":
-        data["problem"] = txt
-        update_state(from_phone, "adresse", data)
-        send_sms(from_phone, "Takk! Hvor gjelder dette? (adresse eller område)")
-        return {"status": "problem_saved"}
+        data["problem"] = txt_clean
+        update_state(phone, "adresse", data)
 
-    # =========================
-    # ADRESSE
-    # =========================
-    if step == "adresse":
-        data["adresse"] = txt
-        update_state(from_phone, "tidspunkt", data)
         send_sms(
-            from_phone,
+            phone,
+            "Takk. Hvor gjelder dette? (adresse eller område)"
+        )
+
+        return {"status": "ok"}
+
+    # === STEG 2: ADRESSE ===
+    if step == "adresse":
+        data["adresse"] = txt_clean
+        update_state(phone, "tidspunkt", data)
+
+        send_sms(
+            phone,
             "Når trenger du hjelp?\n"
             "1️⃣ Akutt\n"
             "2️⃣ I dag\n"
             "3️⃣ Senere"
         )
-        return {"status": "adresse_saved"}
 
-    # =========================
-    # TIDSPUNKT
-    # =========================
+        return {"status": "ok"}
+
+    # === STEG 3: TIDSPUNKT ===
     if step == "tidspunkt":
-        tidspunkt = txt.lower()
-        data["tidspunkt"] = txt
-        update_state(from_phone, "done", data)
+        tidspunkt_raw = txt_clean
+        tidspunkt = txt_clean.lower()
 
-        # Bekreftelse til kunde (alltid)
-        send_sms(
-            from_phone,
-            "Takk 👍 Vi har mottatt henvendelsen din."
+        # Alle ord som betyr AKUTT
+        AKUTT_KEYWORDS = [
+            "akutt",
+            "haster",
+            "haste",
+            "nå",
+            "snarest",
+            "med en gang",
+            "lekkasje",
+            "vannlekkasje",
+            "sprukket",
+            "oversvømmelse",
+            "renner",
+            "flom"
+        ]
+
+        er_akutt = (
+            tidspunkt == "1"
+            or any(word in tidspunkt for word in AKUTT_KEYWORDS)
         )
 
-        # AKUTT → direkte SMS til rørlegger
-        if "akutt" "1" in tidspunkt:
-            plumber_msg = (
-                f"🚨 AKUTT OPPDRAG – {company}\n\n"
-                f"📞 Telefon: {from_phone}\n"
-                f"❗ Problem: {data['problem']}\n"
-                f"📍 Adresse: {data['adresse']}"
-            )
-            send_sms(plumber_phone, plumber_msg)
+        data["tidspunkt"] = tidspunkt_raw
+        update_state(phone, "done", data)
 
-        # I DAG / SENERE → send Calendly til kunde
+        # === AKUTT → VARSEL TIL RØRLEGGER ===
+        if er_akutt:
+            plumber_msg = (
+                f"🚨 AKUTT OPPDRAG – {COMPANY_NAME}\n\n"
+                f"📞 Telefon: {phone}\n"
+                f"❗ Problem: {data['problem']}\n"
+                f"📍 Adresse: {data['adresse']}\n\n"
+                f"⏱️ Kundens svar: {tidspunkt_raw}"
+            )
+
+            send_sms(PLUMBER_PHONE, plumber_msg)
+
+            print("🚨 AKUTT OPPDRAG SENDT")
+
+            send_sms(
+                phone,
+                "Takk! Vi har varslet rørleggeren. "
+                "Du vil bli kontaktet så raskt som mulig."
+            )
+
+        # === IKKE AKUTT → CALENDLY ===
         else:
             send_sms(
-                from_phone,
-                "Hvis du ønsker kan du foreslå ønsket tidspunkt her:\n"
-                f"{calendly_url}\n\n"
-                "Merk: tidspunktet bekreftes av rørlegger før det er endelig."
+                phone,
+                "Takk! Du kan foreslå tidspunkt her:\n"
+                "https://calendly.com/svardirekte/befaring-rorleggerhjelp"
             )
 
-        print("=== FERDIG LEAD ===")
-        print({
-            "kunde": company,
-            "telefon": from_phone,
+        print("FERDIG LEAD:", {
+            "telefon": phone,
             **data
         })
 
-        return {"status": "completed"}
+        return {"status": "ok"}
 
-    # =========================
-    # DONE
-    # =========================
-    if step == "done":
-        send_sms(from_phone, "Vi har allerede mottatt henvendelsen 👍")
-        return {"status": "done"}
+    # === FALLBACK ===
+    send_sms(
+        phone,
+        "Hei! Kan du kort beskrive hva det gjelder?"
+    )
+    update_state(phone, "problem", {})
 
-    return {"status": "unknown_state"}
-
+    return {"status": "ok"}
