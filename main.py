@@ -140,27 +140,31 @@ async def incoming_sms(request: Request):
     # TIDSPUNKT
     # =========================
     if step == "tidspunkt":
-        data["tidspunkt"] = txt
+    data["tidspunkt"] = txt.lower()
 
-        plumber_msg = (
-            "📩 NY FORESPØRSEL\n\n"
-            f"📞 Telefon: {from_phone}\n"
-            f"❗ Problem: {data['problem']}\n"
-            f"📍 Adresse: {data['adresse']}\n"
-            f"⏰ Når: {data['tidspunkt']}"
-        )
+    plumber_msg = (
+        "📩 AKUTT OPPDRAG!\n\n"
+        f"📞 Telefon: {from_phone}\n"
+        f"❗ Problem: {data['problem']}\n"
+        f"📍 Adresse: {data['adresse']}\n"
+        f"⏰ Når: {data['tidspunkt']}"
+    )
 
-        if PLUMBER_PHONE:
-            send_sms(PLUMBER_PHONE, plumber_msg)
+    if PLUMBER_PHONE:
+        send_sms(PLUMBER_PHONE, plumber_msg)
 
-        send_sms(
-            from_phone,
-            "Takk! 👌\nForespørselen er sendt videre.\n"
-            "Du blir kontaktet snart."
-        )
+    # 👉 Kunde får valg: vente ELLER booke
+    send_sms(
+        from_phone,
+        "Takk! 👌 Forespørselen er sendt videre.\n\n"
+        "Ønsker du å booke tidspunkt selv, kan du bruke lenken under:\n"
+        f"{CALENDLY_LINK}\n\n"
+        "Hvis ikke, blir du kontaktet direkte."
+    )
 
-        clear_state(from_phone)
-        return {"status": "ok"}
+    STATE.pop(from_phone, None)
+    return {"status": "ok"}
+
 
     # =========================
     # SIKKER FALLBACK
@@ -171,3 +175,4 @@ async def incoming_sms(request: Request):
         "Hei! 👋\nLa oss starte på nytt.\nHva kan vi hjelpe deg med?"
     )
     return {"status": "ok"}
+
