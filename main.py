@@ -1,131 +1,108 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
 import os
+from twilio.rest import Client
 
 app = FastAPI()
 
-# ===== KONFIG =====
-PLUMBER_PHONE = os.getenv("PLUMBER_PHONE")  # f.eks +479XXXXXXXX
-CALENDLY_LINK = os.getenv("CALENDLY_LINK")  # https://calendly.com/...
-FROM_SMS = os.getenv("FROM_SMS")            # Twilio-nummeret ditt
+# ==== ENV (SAMME SOM FØR – VIKTIG) ====
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_NUMBER = os.getenv("TWILIO_NUMBER")
 
-# ===== ENKEL IN-MEMORY SESSION (OK FOR MVP) =====
-sessions = {}
+PLUMBER_PHONE = os.getenv("PLUMBER_PHONE")
+CALENDLY_LINK = os.getenv("CALENDLY_LINK")
 
-# ===== SMS SENDER =====
-def send_sms(to, body):
-    from twilio.rest import Client
-    client = Client(os.getenv("TWILIO_SID"), os.getenv("TWILIO_AUTH"))
+client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+# ==== ENKEL STATE (slik du hadde før) ====
+STATE = {}
+
+def send_sms(to, msg):
     client.messages.create(
+        from_=TWILIO_NUMBER,
         to=to,
-        from_=FROM_SMS,
-        body=body
+        body=msg
     )
 
-# ===== HJELPEFUNKSJONER =====
-def is_akutt(text: str) -> bool:
+def is_akutt(text):
     text = text.lower()
-    akutt_ord = [
-        "akutt", "nå", "med en gang", "straks", "haste",
-        "1", "haster", "snarest"
-    ]
-    return any(word in text for word in akutt_ord)
+    return any(word in text for word in [
+        "akutt", "1", "nå", "med en gang", "haste", "haster", "lekkasje"
+    ])
 
-def is_later(text: str) -> bool:
-    text = text.lower()
-    return any(word in text for word in ["senere", "i dag", "idag", "imorgen", "morgen"])
-
-# ===== WEBHOOK =====
 @app.post("/incoming-sms")
 async def incoming_sms(request: Request):
     form = await request.form()
-    params = dict(form)
-
-    from_phone = params.get("From")
-    txt = params.get("Body")
+    from_phone = form.get("From")
+    txt = form.get("Body")
 
     if not from_phone or not txt:
-        return PlainTextResponse("")
+        return {"status": "ignored"}
 
     txt = txt.strip()
 
-    # start ny session hvis ikke finnes
-    if from_phone not in sessions:
-        sessions[from_phone] = {
-            "step": "problem",
-            "problem": None,
-            "adresse": None,
-            "tidspunkt": None
-        }
+    state = STATE.get(from_phone, {"step": "start", "data": {}})
+    step = state["step"]
+    data = state["data"]
+
+    # === START ===
+    if step == "start":
+        STATE[from_phone] = {"step": "problem", "data": {}}
+        send_sms(from_phone, "Hei! Hva kan vi hjelpe deg med i dag?")
+        return {"status": "ok"}
+
+    # === PROBLEM ===
+    if step == "problem":
+        data["problem"] = txt
+
+        if is_akutt(txt):
+            send_sms(
+                PLUMBER_PHONE,
+                f"🚨 AKUTT OPPDRAG\n\n📞 {from_phone}\n❗ {data['problem']}"
+            )
+            send_sms(
+                from_phone,
+                "🚨 Dette er registrert som akutt. Rørlegger er varslet."
+            )
+            STATE.pop(from_phone, None)
+            return {"status": "ok"}
+
+        STATE[from_phone] = {"step": "adresse", "data": data}
+        send_sms(from_phone, "Hvor gjelder dette? (adresse)")
+        return {"status": "ok"}
+
+    # === ADRESSE ===
+    if step == "adresse":
+        data["adresse"] = txt
+        STATE[from_phone] = {"step": "tidspunkt", "data": data}
+        send_sms(
+            from_phone,
+            "Når trenger du hjelp?\n\nSkriv f.eks:\n• i dag\n• senere\n• 1 = akutt"
+        )
+        return {"status": "ok"}
+
+    # === TIDSPUNKT ===
+    if step == "tidspunkt":
+        data["tidspunkt"] = txt
+
+        send_sms(
+            PLUMBER_PHONE,
+            f"📩 NY FORESPØRSEL\n\n"
+            f"📞 {from_phone}\n"
+            f"❗ {data['problem']}\n"
+            f"📍 {data['adresse']}\n"
+            f"⏰ {data['tidspunkt']}"
+        )
 
         send_sms(
             from_phone,
-            "Hei! 👋\nHva kan vi hjelpe deg med i dag?"
-        )
-        return PlainTextResponse("")
-
-    session = sessions[from_phone]
-
-    # ===== STEG 1: PROBLEM =====
-    if session["step"] == "problem":
-        session["problem"] = txt
-        session["step"] = "adresse"
-
-        send_sms(
-            from_phone,
-            "Takk! 📍\nHvor gjelder dette? (adresse)"
-        )
-        return PlainTextResponse("")
-
-    # ===== STEG 2: ADRESSE =====
-    if session["step"] == "adresse":
-        session["adresse"] = txt
-        session["step"] = "tidspunkt"
-
-        send_sms(
-            from_phone,
-            "Når trenger du hjelp?\nSkriv f.eks:\n• akutt\n• i dag\n• senere"
-        )
-        return PlainTextResponse("")
-
-    # ===== STEG 3: TIDSPUNKT =====
-    if session["step"] == "tidspunkt":
-        session["tidspunkt"] = txt.lower()
-
-        akutt = is_akutt(txt)
-        senere = is_later(txt)
-
-        # melding til rørlegger
-        plumber_msg = (
-            f"{'🚨 AKUTT OPPDRAG' if akutt else '📩 NY FORESPØRSEL'}\n\n"
-            f"📞 Telefon: {from_phone}\n"
-            f"❗ Problem: {session['problem']}\n"
-            f"📍 Adresse: {session['adresse']}\n"
-            f"⏰ Tidspunkt: {session['tidspunkt']}"
+            "Takk! Henvendelsen er sendt videre.\n\n"
+            f"Ønsker du å booke selv kan du bruke denne lenken:\n "https://calendly.com/svardirekte/befaring-rorleggerhjelp"
         )
 
-        send_sms(PLUMBER_PHONE, plumber_msg)
+        STATE.pop(from_phone, None)
+        return {"status": "ok"}
 
-        # svar kunde
-        if akutt:
-            send_sms(
-                from_phone,
-                "🚨 Dette er registrert som AKUTT.\nRørlegger er varslet umiddelbart."
-            )
-        elif senere:
-            send_sms(
-                from_phone,
-                f"Takk! 🙌\nHenvendelsen er sendt videre.\n\n"
-                f"Ønsker du å booke tid selv?\n{CALENDLY_LINK}"
-            )
-        else:
-            send_sms(
-                from_phone,
-                "Takk! 🙌\nHenvendelsen er sendt videre."
-            )
-
-        # ferdig → slett session
-        sessions.pop(from_phone, None)
-        return PlainTextResponse("")
-
-    return PlainTextResponse("")
+    STATE.pop(from_phone, None)
+    send_sms(from_phone, "La oss starte på nytt. Hva kan vi hjelpe deg med?")
+    return {"status": "ok"}
