@@ -14,7 +14,7 @@ CUSTOMERS = {
     "+46734745108": {
         "company": "Bergen Rør AS",
         "plumber_phone": "+4795330248",
-        "calendly": "https://calendly.com/aune-leivestad/befaring-rorleggerhjelp"
+        "calendly": "https://calendly.com/svardirekte/befaring-rorleggerhjelp"
     }
 }
 
@@ -125,7 +125,7 @@ async def incoming_sms(request: Request):
         )
 
         # AKUTT → direkte SMS til rørlegger
-        if "akutt" in tidspunkt:
+        if "akutt" "1" in tidspunkt:
             plumber_msg = (
                 f"🚨 AKUTT OPPDRAG – {company}\n\n"
                 f"📞 Telefon: {from_phone}\n"
@@ -160,3 +160,4 @@ async def incoming_sms(request: Request):
         return {"status": "done"}
 
     return {"status": "unknown_state"}
+
