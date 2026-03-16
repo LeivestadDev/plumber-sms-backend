@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(/Users/leivestad/Library/Python/3.9/bin/pytest tests/ -v 2>&1)",
+      "Bash(/Users/leivestad/Library/Python/3.9/bin/pytest tests/test_admin_api.py -v 2>&1)",
+      "Bash(/Users/leivestad/Library/Python/3.9/bin/pytest tests/ -v --tb=no -q 2>&1)",
+      "Bash(npx create-next-app@14 frontend --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --no-git 2>&1)",
+      "Bash(cd /Users/leivestad/Documents/SvarDirekte/SvarDirekte/frontend && npm install @clerk/nextjs axios 2>&1 | tail -5)",
+      "Bash(npm install:*)",
+      "Bash(ls /Users/leivestad/Documents/SvarDirekte/SvarDirekte/app/routers && cat /Users/leivestad/Documents/SvarDirekte/SvarDirekte/app/routers/*.py 2>/dev/null | head -120)",
+      "Bash(npm run:*)",
+      "Bash(node -e \"const c = require\\('@clerk/nextjs'\\); console.log\\(Object.keys\\(c\\).filter\\(k => k.match\\(/sign|user|button|auth/i\\)\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(node -e \"const c = require\\('@clerk/nextjs'\\); console.log\\(Object.keys\\(c\\).join\\('\\\\n'\\)\\)\" | grep -i \"signed\\\\|protect\")",
+      "Bash(node -e \"const c = require\\('@clerk/nextjs'\\); console.log\\(Object.keys\\(c\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(node -e \"const {Show} = require\\('@clerk/nextjs'\\); console.log\\(Show.toString\\(\\).slice\\(0,500\\)\\)\")",
+      "Bash(node -e \"const {UserButton} = require\\('@clerk/nextjs'\\); console.log\\(UserButton.toString\\(\\).slice\\(0,300\\)\\)\")",
+      "Bash(grep -r \"afterSignOutUrl\\\\|signOutUrl\\\\|signOutCallback\" /Users/leivestad/Documents/SvarDirekte/SvarDirekte/frontend/node_modules/@clerk/nextjs/dist --include=\"*.d.ts\" 2>/dev/null | head -5)",
+      "Bash(grep -r \"UserButtonProps\\\\|afterSign\" /Users/leivestad/Documents/SvarDirekte/SvarDirekte/frontend/node_modules/@clerk/types/dist --include=\"*.d.ts\" 2>/dev/null | grep \"afterSign\\\\|signOut\" | head -10)",
+      "Bash(find /Users/leivestad/Documents/SvarDirekte/SvarDirekte/frontend/node_modules/@clerk -name \"*.d.ts\" 2>/dev/null | head -5)",
+      "Bash(grep -r \"UserButton\" /Users/leivestad/Documents/SvarDirekte/SvarDirekte/frontend/node_modules/@clerk/clerk-react/dist --include=\"*.d.ts\" 2>/dev/null | grep \"interface\\\\|type UserButton\" | head -5)",
+      "Bash(grep -rn \"UserButtonProps\" /Users/leivestad/Documents/SvarDirekte/SvarDirekte/frontend/node_modules/@clerk --include=\"*.d.ts\" 2>/dev/null | head -5)",
+      "Bash(node -e \"const c = require\\('@clerk/nextjs/server'\\); console.log\\(Object.keys\\(c\\).join\\('\\\\n'\\)\\)\" 2>/dev/null | head -20)",
+      "Bash(ls:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node:*)"
+    ]
+  }
+}
