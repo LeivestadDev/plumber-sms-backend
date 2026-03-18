@@ -24,7 +24,7 @@ async def main() -> None:
     print("Tables created (or already exist).")
 
     twilio_number = os.getenv("TWILIO_NUMBER", "+4712345678")
-    plumber_phone = os.getenv("PLUMBER_PHONE", "+4798765432")
+    plumber_phone = os.getenv("PLUMBER_PHONE", "+4795330248")
     calendly_url = os.getenv(
         "CALENDLY_URL",
         "https://calendly.com/svardirekte/befaring-rorleggerhjelp",

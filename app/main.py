@@ -5,6 +5,10 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import Depends, FastAPI, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

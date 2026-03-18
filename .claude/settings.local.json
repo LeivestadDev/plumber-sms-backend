@@ -24,7 +24,13 @@
       "Bash(node -e \"const c = require\\('@clerk/nextjs/server'\\); console.log\\(Object.keys\\(c\\).join\\('\\\\n'\\)\\)\" 2>/dev/null | head -20)",
       "Bash(ls:*)",
       "Bash(npx tsc:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(grep -r \"^import\\\\|^from\" /Users/leivestad/Documents/SvarDirekte/SvarDirekte/app/*.py /Users/leivestad/Documents/SvarDirekte/SvarDirekte/app/**/*.py)",
+      "Bash(grep -v \"^$\")",
+      "Bash(git:*)",
+      "Bash(sqlite3:*)",
+      "Bash(printenv:*)",
+      "Bash(python3:*)"
     ]
   }
 }
