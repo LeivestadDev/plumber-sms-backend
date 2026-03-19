@@ -15,7 +15,7 @@ export default function SmsMockup() {
   const [visible, setVisible] = useState(0);
 
   useEffect(() => {
-    const timers = DELAYS.map((delay, i) =>
+    const timers = DELAYS.map((delay) =>
       setTimeout(() => setVisible(i + 1), delay)
     );
     return () => timers.forEach(clearTimeout);
@@ -50,7 +50,7 @@ export default function SmsMockup() {
 
           {/* Messages */}
           <div className="bg-slate-100 px-3 py-4 min-h-[280px] space-y-2">
-            {MESSAGES.slice(0, visible).map((msg, i) => (
+            {MESSAGES.slice(0, visible).map((msg) => (
               <div
                 key={msg.id}
                 className={`flex ${msg.from === "customer" ? "justify-end" : "justify-start"} animate-fade-up`}
