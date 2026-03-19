@@ -15,7 +15,7 @@ export default function SmsMockup() {
   const [visible, setVisible] = useState(0);
 
   useEffect(() => {
-    const timers = DELAYS.map((delay) =>
+    const timers = DELAYS.map((delay, i) =>
       setTimeout(() => setVisible(i + 1), delay)
     );
     return () => timers.forEach(clearTimeout);
