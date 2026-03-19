@@ -38,7 +38,7 @@ const STEPS = [
 
 const TESTIMONIALS = [
   {
-    quote: "Jeg mistet aldri en kunde, men nå er jeg sikker på det. SvarDirekte svarer mens jeg er under oppvasken med hendene fulle.",
+    quote: "Jeg mistet aldri en kunde, men nå er jeg sikker på det. SvarDirekte svarer mens jeg er under vasken med hendene fulle.",
     name: "Kjetil Andreassen",
     role: "Rørlegger, Bergen",
     initials: "KA",
