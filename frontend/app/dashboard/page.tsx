@@ -1,8 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getCustomerId } from "@/lib/getCustomerId";
 import { fetchCustomer, fetchConversations } from "@/lib/api/server";
 import { StatusBadge } from "@/components/StatusBadge";
-import { NoCustomerId } from "@/components/NoCustomerId";
 import { anonymizePhone, timeAgo, isToday, formatDateTime } from "@/lib/utils";
 
 function StatCard({
@@ -50,7 +50,7 @@ function StatCard({
 
 export default async function DashboardPage() {
   const customerId = await getCustomerId();
-  if (!customerId) return <NoCustomerId />;
+  if (!customerId) redirect("/onboarding");
 
   const [customer, conversations] = await Promise.all([
     fetchCustomer(customerId),
