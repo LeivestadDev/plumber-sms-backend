@@ -52,10 +52,25 @@ export default async function DashboardPage() {
   const customerId = await getCustomerId();
   if (!customerId) redirect("/onboarding");
 
-  const [customer, conversations] = await Promise.all([
-    fetchCustomer(customerId),
-    fetchConversations(customerId),
-  ]);
+  let customer, conversations;
+  try {
+    [customer, conversations] = await Promise.all([
+      fetchCustomer(customerId),
+      fetchConversations(customerId),
+    ]);
+  } catch {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 max-w-lg mx-auto mt-16 text-center">
+        <h2 className="text-lg font-semibold text-amber-900 mb-2">Serveren starter opp</h2>
+        <p className="text-sm text-amber-700 mb-4">
+          Backend-serveren vår starter opp — dette tar vanligvis 30–60 sekunder. Prøv å laste siden på nytt.
+        </p>
+        <a href="/dashboard" className="inline-block bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+          Last inn på nytt
+        </a>
+      </div>
+    );
+  }
 
   const todayCount = conversations.filter((c) => isToday(c.created_at)).length;
   const lastConv = conversations[0];
