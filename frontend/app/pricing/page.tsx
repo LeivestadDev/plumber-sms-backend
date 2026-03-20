@@ -67,7 +67,7 @@ export default function PricingPage({
               299 kr
               <span className="text-lg font-normal text-slate-500">/mnd</span>
             </div>
-            <p className="text-slate-500 text-sm mb-6">Begrenset tilbud for de første 50 kundene</p>
+            <p className="text-slate-500 text-sm mb-6">Begrenset tilbud for de første 5 kundene</p>
             <ul className="space-y-3 mb-8">
               {PILOT_FEATURES.map((f) => (
                 <li key={f} className="flex items-center gap-3 text-sm text-slate-700">
