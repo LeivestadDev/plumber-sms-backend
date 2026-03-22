@@ -17,11 +17,16 @@ function headers() {
   return { "Content-Type": "application/json", "X-API-Key": apiKey };
 }
 
+function withTimeout(ms: number): AbortSignal {
+  return AbortSignal.timeout(ms);
+}
+
 export async function fetchCustomer(id: number): Promise<CustomerWithStats> {
   const { baseUrl } = getConfig();
   const res = await fetch(`${baseUrl}/api/customers/${id}`, {
     headers: headers(),
     next: { revalidate: 60 },
+    signal: withTimeout(8000),
   });
   if (!res.ok) throw new Error(`fetchCustomer failed: ${res.status}`);
   return res.json();
@@ -37,6 +42,7 @@ export async function fetchConversations(
   const res = await fetch(url.toString(), {
     headers: headers(),
     next: { revalidate: 30 },
+    signal: withTimeout(8000),
   });
   if (!res.ok) throw new Error(`fetchConversations failed: ${res.status}`);
   return res.json();
@@ -47,6 +53,7 @@ export async function fetchMessages(conversationId: number): Promise<Message[]> 
   const res = await fetch(`${baseUrl}/api/conversations/${conversationId}/messages`, {
     headers: headers(),
     next: { revalidate: 30 },
+    signal: withTimeout(8000),
   });
   if (!res.ok) throw new Error(`fetchMessages failed: ${res.status}`);
   return res.json();
