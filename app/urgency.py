@@ -29,7 +29,7 @@ TODAY_KEYWORDS = [
 
 LATER_KEYWORDS = [
     # single words
-    "befaring", "planlegger",
+    "befaring", "planlegger", "senere", "later",
     # phrases (checked before single words — keeps "ikke haster" from matching URGENT)
     "neste uke", "ikke haster", "ingen hast", "ingen hastverk",
     "når dere har tid", "neste måned", "tar det med ro", "om en stund",
