@@ -6,10 +6,10 @@ from sqlalchemy.orm import DeclarativeBase
 _raw_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./svardirekte.db")
 
 # Neon/Heroku sender "postgres://..." men SQLAlchemy async krever "postgresql+asyncpg://..."
-if _raw_url.startswith("postgres://"):
-    _raw_url = _raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
-elif _raw_url.startswith("postgresql://") and "+asyncpg" not in _raw_url:
-    _raw_url = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+if _raw_url.startswith("postgres://") and "+psycopg" not in _raw_url and "+asyncpg" not in _raw_url:
+    _raw_url = _raw_url.replace("postgres://", "postgresql+psycopg://", 1)
+elif _raw_url.startswith("postgresql://") and "+psycopg" not in _raw_url and "+asyncpg" not in _raw_url:
+    _raw_url = _raw_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
 DATABASE_URL = _raw_url
 
