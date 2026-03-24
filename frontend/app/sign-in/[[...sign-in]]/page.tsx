@@ -10,7 +10,7 @@ export default function SignInPage() {
           </a>
           <p className="text-slate-500 mt-2 text-sm">Logg inn på dashboardet</p>
         </div>
-        <SignIn />
+        <SignIn fallbackRedirectUrl="/dashboard" />
       </div>
     </div>
   );

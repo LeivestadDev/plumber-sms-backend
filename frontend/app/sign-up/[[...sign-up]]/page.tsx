@@ -12,7 +12,7 @@ export default function SignUpPage() {
             Opprett konto og start gratis prøveperiode
           </p>
         </div>
-        <SignUp />
+        <SignUp fallbackRedirectUrl="/onboarding" />
       </div>
     </div>
   );
