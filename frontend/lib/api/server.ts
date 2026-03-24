@@ -28,6 +28,7 @@ export async function fetchCustomer(id: number): Promise<CustomerWithStats> {
     next: { revalidate: 60 },
     signal: withTimeout(8000),
   });
+  if (res.status === 404) throw new Error("CUSTOMER_NOT_FOUND");
   if (!res.ok) throw new Error(`fetchCustomer failed: ${res.status}`);
   return res.json();
 }

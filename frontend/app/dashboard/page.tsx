@@ -58,7 +58,10 @@ export default async function DashboardPage() {
       fetchCustomer(customerId),
       fetchConversations(customerId),
     ]);
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.message === "CUSTOMER_NOT_FOUND") {
+      redirect("/onboarding");
+    }
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 max-w-lg mx-auto mt-16 text-center">
         <h2 className="text-lg font-semibold text-amber-900 mb-2">Serveren starter opp</h2>
