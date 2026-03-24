@@ -88,6 +88,13 @@ async def create_customer(
         await db.commit()
     except IntegrityError:
         await db.rollback()
+        # Number already exists — return existing customer so onboarding can link it
+        result = await db.execute(
+            select(Customer).where(Customer.twilio_number == body.twilio_number)
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            return existing
         raise HTTPException(
             status_code=409,
             detail=f"twilio_number '{body.twilio_number}' is already registered.",
